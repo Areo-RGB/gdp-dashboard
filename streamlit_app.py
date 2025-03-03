@@ -1,151 +1,88 @@
 import streamlit as st
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-import math
-from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='test',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
-
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
-
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
-
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
+def main():
+    # Set page title
+    st.title("Random Bar Chart Generator")
+    
+    # Add description
+    st.write("This app displays a bar chart with 10 random values.")
+    
+    # Sidebar controls
+    st.sidebar.header("Chart Controls")
+    seed = st.sidebar.number_input("Random Seed", min_value=1, max_value=1000, value=42)
+    min_value = st.sidebar.number_input("Minimum Value", min_value=1, max_value=50, value=1)
+    max_value = st.sidebar.number_input("Maximum Value", min_value=51, max_value=200, value=100)
+    
+    # Color selection
+    color_options = ['skyblue', 'salmon', 'lightgreen', 'violet', 'gold']
+    selected_color = st.sidebar.selectbox("Bar Color", color_options)
+    
+    # Generate button
+    if st.sidebar.button("Generate New Chart"):
+        # This will trigger a rerun with the current settings
+        st.experimental_rerun()
+    
+    # Set random seed for reproducibility
+    np.random.seed(seed)
+    
+    # Generate 10 random values
+    values = np.random.randint(min_value, max_value, 10)
+    
+    # Create categories
+    categories = [f'Item {i+1}' for i in range(10)]
+    
+    # Create DataFrame for the data
+    df = pd.DataFrame({
+        'Category': categories,
+        'Value': values
+    })
+    
+    # Display the raw data as a table
+    if st.checkbox("Show Raw Data"):
+        st.write(df)
+    
+    # Create the bar chart with matplotlib
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.bar(categories, values, color=selected_color)
+    
+    # Add title and labels
+    ax.set_title('Bar Chart with 10 Random Entries', fontsize=16)
+    ax.set_xlabel('Categories', fontsize=12)
+    ax.set_ylabel('Values', fontsize=12)
+    
+    # Add the values on top of each bar
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 1,
+                f'{height}', ha='center', va='bottom')
+    
+    # Add grid lines for better readability
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45)
+    
+    # Adjust layout
+    plt.tight_layout()
+    
+    # Display the plot in Streamlit
+    st.pyplot(fig)
+    
+    # Add download option for CSV
+    csv = df.to_csv(index=False)
+    st.download_button(
+        label="Download data as CSV",
+        data=csv,
+        file_name="random_bar_data.csv",
+        mime="text/csv"
     )
+    
+    # GitHub info
+    st.markdown("---")
+    st.write("Code available on [GitHub](https://github.com/yourusername/streamlit-random-bar-chart)")
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: TESR
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+if __name__ == "__main__":
+    main()
